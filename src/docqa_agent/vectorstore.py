@@ -1,3 +1,5 @@
+"""test cli command: python -m main index --docs ./data --rebuild-index"""
+
 import logging
 from pathlib import Path
 from typing import List
@@ -5,6 +7,9 @@ from typing import List
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger("docqa_agent.vectorstore")
 

@@ -1,3 +1,5 @@
+"""test cli command: python -m main chunk --docs ./data"""
+
 import hashlib
 from typing import List
 

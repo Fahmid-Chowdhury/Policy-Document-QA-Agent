@@ -1,3 +1,5 @@
+"""test cli command: python -m main ingest --docs ./data"""
+
 import logging
 from pathlib import Path
 from typing import List, Optional
@@ -49,6 +51,7 @@ def _normalize_metadata(
 ) -> Document:
     # Keep existing metadata too, but ensure we have our standard keys.
     meta = dict(doc.metadata) if doc.metadata else {}
+    print(int(meta["page"]))
 
     # Store relative path for portability across machines
     try:
