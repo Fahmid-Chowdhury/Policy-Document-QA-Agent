@@ -51,7 +51,6 @@ def _normalize_metadata(
 ) -> Document:
     # Keep existing metadata too, but ensure we have our standard keys.
     meta = dict(doc.metadata) if doc.metadata else {}
-    print(int(meta["page"]))
 
     # Store relative path for portability across machines
     try:

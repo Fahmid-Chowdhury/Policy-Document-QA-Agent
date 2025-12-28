@@ -2,6 +2,7 @@
 python-dotenv>=1.0.1
 pydantic>=2.7.0
 pydantic-settings>=2.2.1
+sentence-transformers>=5.2.0
 
 # --- LangChain (latest packaging style) ---
 langchain>=0.3.0
@@ -10,6 +11,7 @@ langchain-community>=0.3.0
 langchain-text-splitters>=0.3.0
 langchain-chroma>=0.1.2
 langchain-google-genai>=4.0.0
+langchain-huggingface>=1.2.0
 
 # --- Vector store backend ---
 chromadb>=0.5.0

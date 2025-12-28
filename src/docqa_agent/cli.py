@@ -29,13 +29,40 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable debug logging.",
     )
+    
+    parser.add_argument(
+        "--k", 
+        type=int, 
+        default=5, 
+        help="Number of chunks to retrieve."
+    )
+    
+    parser.add_argument(
+        "--mmr",
+        action="store_true",
+        help="Use MMR retrieval (diverse results). If not set, uses similarity.",
+    )
+    
+    parser.add_argument(
+        "--fetch-k",
+        type=int,
+        default=None,
+        help="MMR candidate pool size (only used with --mmr).",
+    )
+    
+    parser.add_argument(
+        "--query",
+        type=str,
+        default=None,
+        help="Query to test retrieval. If omitted, a default query is used.",
+    )
 
     parser.add_argument(
         "command",
         nargs="?",
         default="health",
-        choices=["health", "config", "ingest", "chunk", "index"],
-        help="Command to run: health | config | ingest | chunk | index",
+        choices=["health", "config", "ingest", "chunk", "index", "retrieve"],
+        help="Command to run: health | config | ingest | chunk | index | retrieve",
     )
     return parser
 
@@ -110,25 +137,35 @@ def run_cli() -> None:
         from docqa_agent.ingest import load_documents_from_folder
         from docqa_agent.chunking import chunk_documents
         from docqa_agent.vectorstore import (
-            build_embeddings,
+            # build_embeddings,
+            build_embeddings_hf,
             build_or_load_chroma,
-            rebuild_index,
+            rebuild_index_fresh,
             similarity_search,
         )
 
-        embeddings = build_embeddings()
-        vectordb = build_or_load_chroma(
-            persist_dir=config.index_dir,
-            collection_name=config.collection_name,
-            embeddings=embeddings,
-        )
+        # embeddings = build_embeddings()
+        embeddings = build_embeddings_hf()
 
+        # IMPORTANT: only build DB AFTER rebuild decision
         if args.rebuild_index:
             docs = load_documents_from_folder(args.docs)
             chunks = chunk_documents(docs)
-            rebuild_index(vectordb, chunks)
+
+            vectordb = rebuild_index_fresh(
+                persist_dir=config.index_dir,
+                collection_name=config.collection_name,
+                embeddings=embeddings,
+                chunks=chunks,
+            )
+
             print(f"Rebuilt index with chunks: {len(chunks)}")
         else:
+            vectordb = build_or_load_chroma(
+                persist_dir=config.index_dir,
+                collection_name=config.collection_name,
+                embeddings=embeddings,
+            )
             print("Loaded existing index (no rebuild).")
 
         # Sanity search
@@ -142,6 +179,48 @@ def run_cli() -> None:
             page = meta.get("page")
             cid = meta.get("chunk_id")
             preview = r.page_content[:120].replace("\n", " ")
+            print(
+                f"{i}. source={src} page={page} "
+                f"chunk_id={cid} preview={preview}..."
+            )
+
+        return
+
+    if args.command == "retrieve":
+        if not args.docs:
+            raise SystemExit("Error: --docs is required for retrieve")
+
+        # from docqa_agent.vectorstore import build_embeddings, build_or_load_chroma
+        from docqa_agent.vectorstore import build_embeddings_hf, build_or_load_chroma
+        from docqa_agent.retriever import build_retriever, retrieve_docs
+
+        embeddings = build_embeddings_hf()
+        vectordb = build_or_load_chroma(
+            persist_dir=config.index_dir,
+            collection_name=config.collection_name,
+            embeddings=embeddings,
+        )
+
+        question = args.query or "Summarize the main topic discussed in the documents."
+        retriever = build_retriever(
+            vectordb=vectordb,
+            k=args.k,
+            use_mmr=args.mmr,
+            fetch_k=args.fetch_k,
+        )
+        docs = retrieve_docs(retriever, question)
+
+        print(f"Query: {question}")
+        print(f"Retrieved chunks: {len(docs)}")
+        print(f"Mode: {'MMR' if args.mmr else 'similarity'} | k={args.k} | fetch_k={args.fetch_k}")
+
+        for i, d in enumerate(docs, start=1):
+            meta = d.metadata or {}
+            src = meta.get("source_file")
+            page = meta.get("page")
+            cid = meta.get("chunk_id")
+            preview = d.page_content[:180].replace("\n", " ")
             print(f"{i}. source={src} page={page} chunk_id={cid} preview={preview}...")
         return
+
 
