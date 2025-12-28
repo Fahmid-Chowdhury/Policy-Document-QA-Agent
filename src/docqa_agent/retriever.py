@@ -1,4 +1,4 @@
-"""test cli command: python -m main retrieve --docs ./data --k 5 --mmr --fetch-k 30 --query "What is the main argument of the racism paper?""""
+"""test cli command: python -m main retrieve --docs ./data --k 5 --mmr --fetch-k 30 --query "What is the main argument of the racism paper?"""
 
 from typing import List, Optional
 

@@ -56,13 +56,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Query to test retrieval. If omitted, a default query is used.",
     )
+    
+    parser.add_argument(
+        "--question",
+        type=str,
+        default=None,
+        help="Question to ask (Phase 5). If omitted, uses a default.",
+    )
+
 
     parser.add_argument(
         "command",
         nargs="?",
         default="health",
-        choices=["health", "config", "ingest", "chunk", "index", "retrieve"],
-        help="Command to run: health | config | ingest | chunk | index | retrieve",
+        choices=["health", "config", "ingest", "chunk", "index", "retrieve", "ask"],
+        help="Command to run: health | config | ingest | chunk | index | retrieve | ask",
     )
     return parser
 
@@ -79,10 +87,17 @@ def run_cli() -> None:
     logger.info("Starting docqa-agent")
     logger.debug("Args: %s", vars(args))
 
+    """
+    python main.py health
+    python main.py --debug health
+    """
     if args.command == "health":
         print("OK: docqa-agent is running")
         return
 
+    """
+    python main.py config
+    """
     if args.command == "config":
         # Print config in a stable, readable way
         print("AppConfig:")
@@ -91,6 +106,9 @@ def run_cli() -> None:
         print(f"  index_dir = {config.index_dir}")
         return
     
+    """
+    python -m main ingest --docs ./data
+    """
     if args.command == "ingest":
         if not args.docs:
             raise SystemExit("Error: --docs is required for ingest")
@@ -107,6 +125,9 @@ def run_cli() -> None:
                 print(f"  {k}: {first.metadata.get(k)}")
         return
     
+    """
+    python -m main chunk --docs ./data
+    """
     if args.command == "chunk":
         if not args.docs:
             raise SystemExit("Error: --docs is required for chunk")
@@ -130,6 +151,10 @@ def run_cli() -> None:
                 print(f"  {k}: {c.metadata.get(k)}")
         return
 
+    """
+    rebuild: python -m main index --docs ./data --rebuild-index
+    reload (no rebuild): python -m main index --docs ./data
+    """
     if args.command == "index":
         if not args.docs:
             raise SystemExit("Error: --docs is required for index")
@@ -186,6 +211,10 @@ def run_cli() -> None:
 
         return
 
+    """
+    similarity retrieval baseline: python -m main retrieve --docs ./data --k 5 --query "What are the leave policies?"
+    MMR diversity check: python -m main retrieve --docs ./data --k 5 --mmr --fetch-k 30 --query "What are the leave policies?"
+    """
     if args.command == "retrieve":
         if not args.docs:
             raise SystemExit("Error: --docs is required for retrieve")
@@ -222,5 +251,43 @@ def run_cli() -> None:
             preview = d.page_content[:180].replace("\n", " ")
             print(f"{i}. source={src} page={page} chunk_id={cid} preview={preview}...")
         return
+    
+    """
+    answerable question: python -m main ask --docs ./data --k 6 --mmr --question "What are the leave policies?"
+    unanswerable question (should refuse): python -m main ask --docs ./data --k 6 --mmr --question "What is the capital of Japan?"
+    """
+    if args.command == "ask":
+        if not args.docs:
+            raise SystemExit("Error: --docs is required for ask")
 
+        from docqa_agent.vectorstore import build_embeddings, build_embeddings_hf, build_or_load_chroma
+        from docqa_agent.retriever import build_retriever, retrieve_docs
+        from docqa_agent.rag import build_llm, answer_question, INSUFFICIENT_MSG
+
+        # embeddings = build_embeddings()
+        embeddings = build_embeddings_hf()
+        vectordb = build_or_load_chroma(
+            persist_dir=config.index_dir,
+            collection_name=config.collection_name,
+            embeddings=embeddings,
+        )
+
+        question = args.question or "What is the main argument in the racism paper?"
+
+        retriever = build_retriever(vectordb=vectordb, k=args.k, use_mmr=args.mmr, fetch_k=args.fetch_k)
+        retrieved = retrieve_docs(retriever, question)
+
+        llm = build_llm()
+        result = answer_question(llm, retrieved, question)
+
+        print(f"Question: {question}\n")
+        print("Answer:")
+        print(result.answer_text)
+        print("\nCitations (retrieved chunks):")
+        if not result.citations:
+            print("  (none)")
+        else:
+            for c in result.citations:
+                print(f"  {c['chunk_tag']}: {c['source_file']} page={c['page']} chunk_id={c['chunk_id']}")
+        return
 
