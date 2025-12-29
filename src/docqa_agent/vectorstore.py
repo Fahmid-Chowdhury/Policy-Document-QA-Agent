@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from typing import List, Optional
 from dotenv import load_dotenv
+from typing import List, Tuple
 
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
@@ -43,7 +44,6 @@ def build_or_load_chroma(persist_dir: str, collection_name: str, embeddings) -> 
         embedding_function=embeddings,
     )
 
-
 def rebuild_index_fresh(
     persist_dir: str,
     collection_name: str,
@@ -71,7 +71,12 @@ def rebuild_index_fresh(
 
     return vectordb
 
-
-
 def similarity_search(vectordb: Chroma, query: str, k: int = 3) -> List[Document]:
     return vectordb.similarity_search(query, k=k)
+
+def similarity_search_with_scores(vectordb: Chroma, query: str, k: int = 5) -> List[Tuple[Document, float]]:
+    """
+    Returns (Document, relevance_score) where score is usually in [0, 1] for Chroma.
+    Exact scaling can vary, so we treat it as a heuristic.
+    """
+    return vectordb.similarity_search_with_relevance_scores(query, k=k)

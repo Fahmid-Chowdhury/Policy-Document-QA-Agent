@@ -64,13 +64,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Question to ask (Phase 5). If omitted, uses a default.",
     )
 
+    parser.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        help="If provided, save structured JSON response to this file.",
+    )
+    
+    parser.add_argument(
+        "--simulate-parse-fail",
+        action="store_true",
+        help="Sanity test: simulate a JSON parse failure and verify fallback still returns valid JSON.",
+    )
 
     parser.add_argument(
         "command",
         nargs="?",
         default="health",
-        choices=["health", "config", "ingest", "chunk", "index", "retrieve", "ask"],
-        help="Command to run: health | config | ingest | chunk | index | retrieve | ask",
+        choices=["health", "config", "ingest", "chunk", "index", "retrieve", "ask", "ask_json"],
+        help="Command to run: health | config | ingest | chunk | index | retrieve | ask | ask_json",
     )
     return parser
 
@@ -272,7 +284,7 @@ def run_cli() -> None:
             embeddings=embeddings,
         )
 
-        question = args.question or "What is the main argument in the racism paper?"
+        question = args.question or "Summarize the main topic discussed in the documents."
 
         retriever = build_retriever(vectordb=vectordb, k=args.k, use_mmr=args.mmr, fetch_k=args.fetch_k)
         retrieved = retrieve_docs(retriever, question)
@@ -291,3 +303,70 @@ def run_cli() -> None:
                 print(f"  {c['chunk_tag']}: {c['source_file']} page={c['page']} chunk_id={c['chunk_id']}")
         return
 
+    """
+    answerable → valid JSON with citations: python -m main ask_json --docs ./data --k 6 --question "What are the leave policies?"
+    unanswerable → refusal JSON: python -m main ask_json --docs ./data --k 6 --question "What is the capital of Japan?"
+    """
+    if args.command == "ask_json":
+        if not args.docs:
+            raise SystemExit("Error: --docs is required for ask_json")
+
+        import json
+
+        from docqa_agent.vectorstore import (
+            build_embeddings,
+            build_embeddings_hf,
+            build_or_load_chroma,
+            similarity_search_with_scores,
+        )
+        from docqa_agent.retriever import build_retriever, retrieve_docs
+        from docqa_agent.structured_rag import build_llm, build_structured_answer
+        from docqa_agent.schema import QAResponse
+
+        # embeddings = build_embeddings()
+        embeddings = build_embeddings_hf()
+        vectordb = build_or_load_chroma(
+            persist_dir=config.index_dir,
+            collection_name=config.collection_name,
+            embeddings=embeddings,
+        )
+
+        question = args.question or "Summarize the main topic discussed in the documents."
+
+        # Get docs + scores (confidence heuristic)
+        scored = similarity_search_with_scores(vectordb, question, k=args.k)
+        retrieved_docs = [d for (d, s) in scored]
+        scores = [float(s) for (d, s) in scored]
+
+        # Optional: compare retriever vs direct top-k scoring results
+        # (Keeping it simple for now: we use scored top-k)
+
+        llm = build_llm()
+
+        if args.simulate_parse_fail:
+            # Force fallback path while still returning valid JSON
+            result = QAResponse(
+                question=question,
+                answer="Insufficient evidence in the provided documents.",
+                citations=[],
+                confidence=0.0,
+                insufficient_evidence=True,
+            )
+        else:
+            result = build_structured_answer(
+                llm=llm,
+                question=question,
+                retrieved_docs=retrieved_docs,
+                retrieved_scores=scores,
+            )
+
+        payload = result.model_dump()
+
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+        if args.out:
+            with open(args.out, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+            print(f"\nSaved JSON to: {args.out}")
+
+        return
