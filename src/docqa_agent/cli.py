@@ -1,8 +1,13 @@
 import argparse
 import logging
+from dotenv import load_dotenv
+
+from langchain_huggingface import ChatHuggingFace
 
 from docqa_agent.config import load_config
 from docqa_agent.logging_setup import setup_logging
+
+load_dotenv()
 
 logger = logging.getLogger("docqa_agent")
 
@@ -75,6 +80,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--simulate-parse-fail",
         action="store_true",
         help="Sanity test: simulate a JSON parse failure and verify fallback still returns valid JSON.",
+    )
+    
+    parser.add_argument(
+        "--llm-model",
+        type=str,
+        default="gemini-2.5-flash",
+        help="LLM model to use for answering questions (Phase 5).",
     )
 
     parser.add_argument(
@@ -174,7 +186,7 @@ def run_cli() -> None:
         from docqa_agent.ingest import load_documents_from_folder
         from docqa_agent.chunking import chunk_documents
         from docqa_agent.vectorstore import (
-            # build_embeddings,
+            build_embeddings,
             build_embeddings_hf,
             build_or_load_chroma,
             rebuild_index_fresh,
@@ -274,7 +286,7 @@ def run_cli() -> None:
 
         from docqa_agent.vectorstore import build_embeddings, build_embeddings_hf, build_or_load_chroma
         from docqa_agent.retriever import build_retriever, retrieve_docs
-        from docqa_agent.rag import build_llm, answer_question, INSUFFICIENT_MSG
+        from docqa_agent.rag import build_llm, build_llm_hf, answer_question, INSUFFICIENT_MSG
 
         # embeddings = build_embeddings()
         embeddings = build_embeddings_hf()
@@ -289,7 +301,9 @@ def run_cli() -> None:
         retriever = build_retriever(vectordb=vectordb, k=args.k, use_mmr=args.mmr, fetch_k=args.fetch_k)
         retrieved = retrieve_docs(retriever, question)
 
-        llm = build_llm()
+        # llm = build_llm()
+        llm = ChatHuggingFace(llm = build_llm_hf())
+        
         result = answer_question(llm, retrieved, question)
 
         print(f"Question: {question}\n")
@@ -320,7 +334,7 @@ def run_cli() -> None:
             similarity_search_with_scores,
         )
         from docqa_agent.retriever import build_retriever, retrieve_docs
-        from docqa_agent.structured_rag import build_llm, build_structured_answer
+        from docqa_agent.structured_rag import build_llm, build_llm_hf, build_structured_answer
         from docqa_agent.schema import QAResponse
 
         # embeddings = build_embeddings()
@@ -340,8 +354,13 @@ def run_cli() -> None:
 
         # Optional: compare retriever vs direct top-k scoring results
         # (Keeping it simple for now: we use scored top-k)
-
-        llm = build_llm()
+        if args.llm_model == "google":
+            llm = build_llm()
+        elif args.llm_model == "hf":
+            llm = ChatHuggingFace(llm = build_llm_hf())
+        # llm = build_llm()
+        # llm = ChatHuggingFace(llm = build_llm_hf())
+        
 
         if args.simulate_parse_fail:
             # Force fallback path while still returning valid JSON

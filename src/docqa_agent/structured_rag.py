@@ -1,13 +1,16 @@
 import json
 from typing import Dict, List, Optional, Tuple
+from dotenv import load_dotenv
 
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 
 from docqa_agent.schema import QAResponse, Citation
 
+load_dotenv()
 
 INSUFFICIENT_MSG = "Insufficient evidence in the provided documents."
 
@@ -17,7 +20,12 @@ def build_llm() -> ChatGoogleGenerativeAI:
         model="gemini-2.5-flash",
         temperature=0.2,
     )
-
+    
+def build_llm_hf() -> HuggingFaceEndpoint:
+    return HuggingFaceEndpoint(
+        repo_id = "meta-llama/Llama-3.1-8B-Instruct",
+        task = "text-generation"
+    )
 
 def _evidence_is_sufficient(docs: List[Document], min_total_chars: int = 600) -> bool:
     if not docs:
@@ -167,19 +175,19 @@ def build_structured_answer(
             page = meta.get("page")
 
             # Ensure quote is actually from the chunk (or fill it)
-            quote = c.quote.strip() if c.quote else ""
-            if not quote:
-                quote = _short_quote(doc.page_content)
-            else:
-                # Keep it short; don’t trust model to be concise
-                quote = _short_quote(quote)
+            # quote = c.quote.strip() if c.quote else ""
+            # if not quote:
+            #     quote = _short_quote(doc.page_content)
+            # else:
+            #     # Keep it short; don’t trust model to be concise
+            #     quote = _short_quote(quote)
 
             fixed_citations.append(
                 Citation(
                     source_file=src,
                     page=page if isinstance(page, int) else None,
                     chunk_id=str(meta.get("chunk_id")),
-                    quote=quote,
+                    # quote=quote,
                 )
             )
             
@@ -222,6 +230,7 @@ def build_structured_answer(
             question=question,
             answer=INSUFFICIENT_MSG,
             citations=[],
-            confidence=min(confidence, 0.2),
+            confidence=min(confidence, 0.1),
             insufficient_evidence=True,
         )
+        

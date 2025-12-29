@@ -7,7 +7,7 @@ class Citation(BaseModel):
     source_file: str = Field(..., description="Relative path of the source file")
     page: Optional[int] = Field(None, description="Page number if available, else null")
     chunk_id: str = Field(..., description="Stable chunk identifier")
-    quote: str = Field(..., description="Short supporting quote from the chunk")
+    # quote: str = Field(..., description="Short supporting quote from the chunk")
 
 
 class QAResponse(BaseModel):

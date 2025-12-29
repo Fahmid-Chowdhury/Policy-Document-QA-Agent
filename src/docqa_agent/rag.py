@@ -4,7 +4,10 @@ from typing import List, Tuple
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_huggingface import HuggingFaceEndpoint
+from dotenv import load_dotenv
 
+load_dotenv()
 
 INSUFFICIENT_MSG = "Insufficient evidence in the provided documents."
 
@@ -22,7 +25,12 @@ def build_llm() -> ChatGoogleGenerativeAI:
         model="gemini-2.5-flash",
         temperature=0.2,
     )
-
+    
+def build_llm_hf() -> HuggingFaceEndpoint:
+    return HuggingFaceEndpoint(
+        repo_id = "openai/gpt-oss-20b",
+        task = "text-generation"
+    )
 
 def _format_context(docs: List[Document]) -> Tuple[str, List[dict]]:
     """
