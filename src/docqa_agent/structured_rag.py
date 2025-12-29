@@ -80,16 +80,38 @@ def _format_context(docs: List[Document]) -> str:
 
 def _compute_confidence(scores: Optional[List[float]]) -> float:
     """
-    Conservative heuristic confidence from retrieval scores.
+    Robust confidence heuristic:
+    - scores may be outside [0, 1] depending on backend/version.
+    - we clamp everything and clamp final result too.
     """
     if not scores:
         return 0.0
 
-    # Clamp and average top few scores
     top = scores[:5]
-    conf = 0.7 * max(top) + 0.3 * (sum(top)/len(top))
-    conf = min(1.0, conf)
+    cleaned = []
+    for x in top:
+        try:
+            x = float(x)
+        except Exception:
+            continue
+        # clamp score into [0, 1]
+        if x < 0.0:
+            x = 0.0
+        if x > 1.0:
+            x = 1.0
+        cleaned.append(x)
 
+    if not cleaned:
+        return 0.0
+
+    avg = sum(cleaned) / len(cleaned)
+    conf = avg * 0.95  # conservative scaling
+
+    # FINAL clamp (most important)
+    if conf < 0.0:
+        conf = 0.0
+    if conf > 1.0:
+        conf = 1.0
     return conf
 
 
@@ -104,6 +126,10 @@ def build_structured_answer(
     If parsing fails, returns fallback JSON (insufficient evidence).
     """
     confidence = _compute_confidence(retrieved_scores)
+    if confidence < 0.0:
+        confidence = 0.0
+    if confidence > 1.0:
+        confidence = 1.0
 
     if not _evidence_is_sufficient(retrieved_docs):
         return QAResponse(

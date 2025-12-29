@@ -83,18 +83,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     
     parser.add_argument(
+        "--no-citations",
+        action="store_true",
+        help="Start interactive mode with citations hidden.",
+    )
+    
+    parser.add_argument(
         "--llm-model",
         type=str,
         default="gemini-2.5-flash",
         help="LLM model to use for answering questions (Phase 5).",
     )
+    
+    parser.add_argument(
+        "--embedding",
+        type=str,
+        default="google",
+        help="Embedding model to use for vector store.",
+    ) 
 
     parser.add_argument(
         "command",
         nargs="?",
         default="health",
-        choices=["health", "config", "ingest", "chunk", "index", "retrieve", "ask", "ask_json"],
-        help="Command to run: health | config | ingest | chunk | index | retrieve | ask | ask_json",
+        choices=["health", "config", "ingest", "chunk", "index", "retrieve", "ask", "ask_json", "run", "eval"],
+        help="Command to run: health | config | ingest | chunk | index | retrieve | ask | ask_json | run | eval",
     )
     return parser
 
@@ -236,8 +249,8 @@ def run_cli() -> None:
         return
 
     """
-    similarity retrieval baseline: python -m main retrieve --docs ./data --k 5 --query "What are the leave policies?"
-    MMR diversity check: python -m main retrieve --docs ./data --k 5 --mmr --fetch-k 30 --query "What are the leave policies?"
+    similarity retrieval baseline: python -m main retrieve --docs ./data --k 5 --embedding hf --query "What are the leave policies?"
+    MMR diversity check: python -m main retrieve --docs ./data --k 5 --mmr --fetch-k 30 --embedding hf --query "What are the leave policies?"
     """
     if args.command == "retrieve":
         if not args.docs:
@@ -247,7 +260,11 @@ def run_cli() -> None:
         from docqa_agent.vectorstore import build_embeddings_hf, build_or_load_chroma
         from docqa_agent.retriever import build_retriever, retrieve_docs
 
-        embeddings = build_embeddings_hf()
+        if args.embedding == "google":
+            embeddings = build_embeddings()
+        elif args.embedding == "hf":
+            embeddings = build_embeddings_hf()
+        # embeddings = build_embeddings_hf()
         vectordb = build_or_load_chroma(
             persist_dir=config.index_dir,
             collection_name=config.collection_name,
@@ -277,8 +294,8 @@ def run_cli() -> None:
         return
     
     """
-    answerable question: python -m main ask --docs ./data --k 6 --mmr --question "What are the leave policies?"
-    unanswerable question (should refuse): python -m main ask --docs ./data --k 6 --mmr --question "What is the capital of Japan?"
+    answerable question: python -m main ask --docs ./data --k 6 --mmr --embedding hf --llm_model google --question "What are the leave policies?"
+    unanswerable question (should refuse): python -m main ask --docs ./data --k 6 --mmr --embedding hf --llm_model google --question "What is the capital of Japan?"
     """
     if args.command == "ask":
         if not args.docs:
@@ -288,8 +305,12 @@ def run_cli() -> None:
         from docqa_agent.retriever import build_retriever, retrieve_docs
         from docqa_agent.rag import build_llm, build_llm_hf, answer_question, INSUFFICIENT_MSG
 
+        if args.embedding == "google":
+            embeddings = build_embeddings()
+        elif args.embedding == "hf":
+            embeddings = build_embeddings_hf()
         # embeddings = build_embeddings()
-        embeddings = build_embeddings_hf()
+        # embeddings = build_embeddings_hf()
         vectordb = build_or_load_chroma(
             persist_dir=config.index_dir,
             collection_name=config.collection_name,
@@ -318,8 +339,8 @@ def run_cli() -> None:
         return
 
     """
-    answerable → valid JSON with citations: python -m main ask_json --docs ./data --k 6 --question "What are the leave policies?"
-    unanswerable → refusal JSON: python -m main ask_json --docs ./data --k 6 --question "What is the capital of Japan?"
+    answerable → valid JSON with citations: python -m main ask_json --docs ./data --k 6 --embedding hf --llm_model google --question "What are the leave policies?"
+    unanswerable → refusal JSON: python -m main ask_json --docs ./data --k 6 --embedding hf --llm_model google --question "What is the capital of Japan?"
     """
     if args.command == "ask_json":
         if not args.docs:
@@ -337,8 +358,12 @@ def run_cli() -> None:
         from docqa_agent.structured_rag import build_llm, build_llm_hf, build_structured_answer
         from docqa_agent.schema import QAResponse
 
+        if args.embedding == "google":
+            embeddings = build_embeddings()
+        elif args.embedding == "hf":
+            embeddings = build_embeddings_hf()
         # embeddings = build_embeddings()
-        embeddings = build_embeddings_hf()
+        # embeddings = build_embeddings_hf()
         vectordb = build_or_load_chroma(
             persist_dir=config.index_dir,
             collection_name=config.collection_name,
@@ -354,6 +379,7 @@ def run_cli() -> None:
 
         # Optional: compare retriever vs direct top-k scoring results
         # (Keeping it simple for now: we use scored top-k)
+        
         if args.llm_model == "google":
             llm = build_llm()
         elif args.llm_model == "hf":
@@ -389,3 +415,115 @@ def run_cli() -> None:
             print(f"\nSaved JSON to: {args.out}")
 
         return
+    
+    """
+    with index rebuild: python -m main run --docs ./data --k 15 --mmr --rebuild-index --llm-model google --embedding hf
+    without index rebuild: python -m main run --docs ./data --k 15 --mmr --llm-model google --embedding hf
+    """
+    if args.command == "run":
+        if not args.docs:
+            raise SystemExit("Error: --docs is required for run")
+
+        from docqa_agent.ingest import load_documents_from_folder
+        from docqa_agent.chunking import chunk_documents
+        from docqa_agent.vectorstore import (
+            build_embeddings,
+            build_embeddings_hf,
+            build_or_load_chroma,
+            rebuild_index_fresh,
+            similarity_search_with_scores,
+        )
+        from docqa_agent.structured_rag import build_llm, build_llm_hf, build_structured_answer
+        from docqa_agent.interactive import SessionState, handle_command, print_help
+
+        if args.embedding == "google":
+            embeddings = build_embeddings()
+        elif args.embedding == "hf":
+            embeddings = build_embeddings_hf()
+        # embeddings = build_embeddings()
+        # embeddings = build_embeddings_hf()
+
+        # IMPORTANT: avoid Windows lock issue by deciding rebuild BEFORE opening DB
+        if args.rebuild_index:
+            docs = load_documents_from_folder(args.docs)
+            chunks = chunk_documents(docs)
+            vectordb = rebuild_index_fresh(
+                persist_dir=config.index_dir,
+                collection_name=config.collection_name,
+                embeddings=embeddings,
+                chunks=chunks,
+            )
+            print(f"Index rebuilt with chunks: {len(chunks)}")
+        else:
+            vectordb = build_or_load_chroma(
+                persist_dir=config.index_dir,
+                collection_name=config.collection_name,
+                embeddings=embeddings,
+            )
+            print("Index loaded.")
+
+        if args.llm_model == "google":
+            llm = build_llm()
+        elif args.llm_model == "hf":
+            llm = ChatHuggingFace(llm = build_llm_hf())
+        # llm = build_llm()
+        # llm = ChatHuggingFace(llm = build_llm_hf())
+        
+
+        state = SessionState(show_citations=(not args.no_citations), last_response=None)
+        print_help()
+        print("\nInteractive mode. Ask questions or type :help\n")
+
+        while True:
+            try:
+                line = input("> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nExiting.")
+                return
+
+            if not line:
+                continue
+
+            if handle_command(state, line):
+                continue
+
+            question = line
+
+            # Retrieve docs + scores for confidence
+            scored = similarity_search_with_scores(vectordb, question, k=args.k)
+            retrieved_docs = [d for (d, s) in scored]
+            scores = [float(s) for (d, s) in scored]
+
+            result = build_structured_answer(
+                llm=llm,
+                question=question,
+                retrieved_docs=retrieved_docs,
+                retrieved_scores=scores,
+            )
+
+            state.last_response = result
+
+            print("\nAnswer:\n")
+            print(result.answer)
+
+            if state.show_citations:
+                print("\nCitations:\n")
+                if not result.citations:
+                    print("  (none)")
+                else:
+                    for c in result.citations:
+                        # This assumes your Phase 6 schema is chunk-level (source_file/page/chunk_id/quote)
+                        print(f"  - {c.source_file} page={c.page} chunk_id={c.chunk_id}")
+                        # print(f"    quote: {c.quote}")
+
+            print("")  # spacing
+    
+    """
+    python -m main eval --k 10 --embedding hf --llm-model google
+    """
+    if args.command == "eval":
+        from docqa_agent.eval import main as eval_main
+
+        # Use config index settings; k from CLI
+        code = eval_main(index_dir=config.index_dir, collection_name=config.collection_name, k=args.k, embedding=args.embedding, llm_model=args.llm_model)
+        raise SystemExit(code)
