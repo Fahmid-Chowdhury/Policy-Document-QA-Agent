@@ -51,13 +51,16 @@ def rebuild_index_fresh(
     chunks: List[Document],
 ) -> Chroma:
     wipe_persist_dir(persist_dir)
-
+    # try:
     vectordb = build_or_load_chroma(
         persist_dir=persist_dir,
         collection_name=collection_name,
         embeddings=embeddings,
     )
-
+    # except Exception as e:
+    #     print(f"Error building or loading Chroma vector store: {e}")
+    #     raise e
+    
     ids = []
     for c in chunks:
         cid = c.metadata.get("chunk_id")

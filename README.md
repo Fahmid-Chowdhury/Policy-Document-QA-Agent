@@ -43,6 +43,8 @@ This project is designed to be:
 Policy-Document-QA-Agent/
 ├─ src/
 │  ├─ main.py
+│  ├─ make.bat               # Windows task runner
+│  ├─ Makefile               # macOS/Linux task runner
 │  ├─ data/                  # Documents to index
 │  ├─ .index/                # Persistent vector store (auto-generated)
 │  └─ docqa_agent/
@@ -60,8 +62,6 @@ Policy-Document-QA-Agent/
 ├─ .env
 ├─ .env.example
 ├─ requirements.txt
-├─ make.bat                  # Windows task runner
-├─ Makefile                  # macOS/Linux task runner
 └─ README.md
 ```
 

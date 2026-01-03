@@ -1,1 +1,0 @@
-python -m main ask_json --docs ./data --k 6 --question "What are the leave policies?"
