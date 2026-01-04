@@ -1,39 +1,59 @@
-# Policy-Document-QA-Agent
-
----
-
 # 📄 Policy-Document-QA-Agent
 
-A **production-grade CLI Document Question Answering (QA) system** built with  **LangChain** .
-It indexes internal policy documents (PDF / TXT / DOCX), answers questions  **only from retrieved evidence** , provides  **citations** , supports  **strict structured JSON output** , and **refuses to answer** when evidence is insufficient.
+A **production-grade Document Question Answering (QA) system** built with **LangChain**, offering both:
+
+* a **powerful CLI interface** for research, debugging, and batch evaluation, and
+* a **Django REST API** suitable for integration into real applications.
+
+The system indexes internal policy documents (PDF / TXT / DOCX), answers questions **strictly from retrieved evidence**, provides **verifiable citations**, produces **structured JSON outputs**, and **refuses to answer** when evidence is insufficient.
 
 This project is designed to be:
 
 * audit-friendly
-* deterministic
-* reviewable by senior engineers
-* suitable for real policy / compliance documents
+* deterministic and reviewable
+* safe for policy / compliance documents
+* production-oriented (logging, evaluation, API hardening)
 
 ---
 
 ## ✨ Key Features
 
-* **Multi-format ingestion** : PDF, TXT, DOCX
-* **Chunked indexing** with metadata preservation
-* **Vector search** with configurable `k`, MMR, and fetch-k
-* **Pluggable embeddings** :
+### Core RAG Capabilities
+
+* Multi-format ingestion: **PDF, TXT, DOCX**
+* Chunked indexing with **metadata preservation**
+* Vector search with configurable **k**, **MMR**, and **fetch-k**
+* **Strict refusal behavior** when evidence is insufficient
+* Chunk-level **citations** (deduplicated and capped)
+* Schema-validated **structured JSON output**
+* Deterministic, non-hallucinatory answers
+
+### Model Flexibility
+
+* **Pluggable embeddings**
+
   * Google Gemini embeddings
   * Hugging Face embeddings
-* **Pluggable LLMs** :
-  * Google Gemini
+* **Pluggable LLMs**
+
+  * Google Gemini models
   * Hugging Face chat models
-* **Strict refusal behavior** :
-  * If evidence is weak → *“Insufficient evidence in the provided documents.”*
-* **Citations** (chunk-level, deduped, capped)
-* **Structured JSON output** (schema-validated, always valid)
-* **Evaluation suite** with pass/fail reporting
-* **Interactive CLI mode**
-* **One-command workflow** via `make.bat` / `Makefile`
+
+### CLI Tooling
+
+* Interactive CLI mode
+* Retrieval debugging commands
+* One-command workflows via `make.bat` / `Makefile`
+* Built-in **evaluation suite** with pass/fail reporting
+
+### REST API (Django + DRF)
+
+* Versioned REST endpoints (`/v1/*`)
+* API key authentication
+* Centralized error handling
+* File-based error logging with stack traces
+* Warm-up endpoint to preload models
+* Postman-friendly request/response design
 
 ---
 
@@ -41,12 +61,26 @@ This project is designed to be:
 
 ```
 Policy-Document-QA-Agent/
-├─ src/
+├─ server/                     # Django REST API
+│  ├─ api/
+│  │  ├─ services/             # Bridges API ↔ core RAG logic
+│  │  ├─ serializers.py
+│  │  ├─ views.py
+│  │  ├─ auth.py               # API key auth
+│  │  ├─ safe.py               # Global exception wrapper
+│  │  └─ utils.py              # Response helpers
+│  ├─ docqa_api/
+│  │  ├─ settings.py
+│  │  ├─ urls.py
+│  │  └─ wsgi.py
+│  ├─ logs/
+│  │  └─ docqa_api.log         # Error & traceback logs
+│  └─ manage.py
+│
+├─ src/                        # Core RAG system (CLI)
 │  ├─ main.py
-│  ├─ make.bat               # Windows task runner
-│  ├─ Makefile               # macOS/Linux task runner
-│  ├─ data/                  # Documents to index
-│  ├─ .index/                # Persistent vector store (auto-generated)
+│  ├─ data/                    # Documents to index
+│  ├─ .index/                  # Persistent vector store
 │  └─ docqa_agent/
 │     ├─ ingest.py
 │     ├─ chunking.py
@@ -59,6 +93,7 @@ Policy-Document-QA-Agent/
 │     ├─ interactive.py
 │     ├─ cli.py
 │     └─ logging_setup.py
+│
 ├─ .env
 ├─ .env.example
 ├─ requirements.txt
@@ -69,7 +104,7 @@ Policy-Document-QA-Agent/
 
 ## 🔧 Setup
 
-### 1️⃣ Create a virtual environment (recommended)
+### 1️⃣ Create a virtual environment
 
 ```bash
 python -m venv .venv
@@ -90,7 +125,7 @@ Create `.env` from the example:
 copy .env.example .env   # Windows
 ```
 
-Fill in **at least one** provider:
+Provide **at least one provider**:
 
 ```env
 # Google Gemini
@@ -98,170 +133,52 @@ GOOGLE_API_KEY=your_google_api_key_here
 
 # Hugging Face
 HUGGINGFACEHUB_API_TOKEN=your_hf_token_here
+
+# REST API security
+DOCQA_API_KEY=your_api_key_here
 ```
 
 ---
 
-## 🚀 Quick Start (Recommended)
+## 🚀 CLI Usage (Core System)
 
-### Windows (using `make.bat`)
-
-```powershell
-.\make.bat index-rebuild
-.\make.bat run
-```
-
-### macOS / Linux
-
-```bash
-make index-rebuild
-make run
-```
-
----
-
-## 🧠 Supported Models
-
-### Embeddings (`--embedding`)
-
-| Value      | Provider                 |
-| ---------- | ------------------------ |
-| `google` | Google Gemini Embeddings |
-| `hf`     | Hugging Face embeddings  |
-
-### LLMs (`--llm-model`)
-
-| Value      | Provider                          |
-| ---------- | --------------------------------- |
-| `google` | Gemini (e.g.`gemini-2.5-flash`) |
-| `hf`     | Hugging Face chat model           |
-
-Example:
-
-```bash
-python -m main ask --embedding hf --llm-model google
-```
-
----
-
-## 🧪 Core CLI Commands
-
-### Health check
-
-```bash
-python main.py health
-```
-
-### Show config
-
-```bash
-python main.py config
-```
-
-### Ingest documents
+### Ingest & index documents
 
 ```bash
 python -m main ingest --docs ./data
-```
-
-### Chunk documents
-
-```bash
 python -m main chunk --docs ./data
-```
-
-### Build / rebuild index
-
-```bash
 python -m main index --docs ./data --rebuild-index
 ```
 
-### Reload existing index
+### Ask questions (human-readable)
 
 ```bash
-python -m main index --docs ./data
+python -m main ask --k 6 --mmr --embedding hf --llm-model google \
+  --question "What are the leave policies?"
+```
+
+### Structured JSON output
+
+```bash
+python -m main ask_json --k 6 --embedding hf --llm-model google \
+  --question "What are the leave policies?"
+```
+
+### Interactive mode
+
+```bash
+python -m main run --k 15 --mmr --embedding hf --llm-model google
 ```
 
 ---
 
-## 🔍 Retrieval Debugging
+## 🧪 Evaluation Suite (CLI)
 
-### Similarity search
+Runs predefined test questions and verifies:
 
-```bash
-python -m main retrieve --docs ./data --k 5 --embedding hf --query "What are the leave policies?"
-```
-
-### MMR (diverse retrieval)
-
-```bash
-python -m main retrieve --docs ./data --k 5 --mmr --fetch-k 30 --embedding hf --query "What are the leave policies?"
-```
-
----
-
-## 💬 Ask Questions (Human-Readable)
-
-### Answerable question
-
-```bash
-python -m main ask --docs ./data --k 6 --mmr --embedding hf --llm-model google --question "What are the leave policies?"
-```
-
-### Unanswerable question (refusal)
-
-```bash
-python -m main ask --docs ./data --k 6 --mmr --embedding hf --llm-model google --question "What is the capital of Japan?"
-```
-
----
-
-## 📦 Structured JSON Output (API-Ready)
-
-### Answerable → JSON with citations
-
-```bash
-python -m main ask_json --docs ./data --k 6 --embedding hf --llm-model google --question "What are the leave policies?"
-```
-
-### Unanswerable → refusal JSON
-
-```bash
-python -m main ask_json --docs ./data --k 6 --embedding hf --llm-model google --question "What is the capital of Japan?"
-```
-
-### Save JSON to file
-
-```bash
-python -m main ask_json --docs ./data --out response.json
-```
-
----
-
-## 🖥️ Interactive Mode
-
-```bash
-python -m main run --docs ./data --k 15 --mmr --embedding hf --llm-model google
-```
-
-### Interactive commands
-
-```
-:help
-:citations on | off
-:save last.json
-:exit
-```
-
----
-
-## 🧪 Evaluation Suite
-
-Runs predefined test questions and checks:
-
+* refusals occur when expected
 * citations exist when answerable
-* refusals happen when expected
-* JSON schema is valid
+* JSON schema is always valid
 
 ```bash
 python -m main eval --k 10 --embedding hf --llm-model google
@@ -276,14 +193,101 @@ Passed: 5/5
 
 ---
 
-## 🛑 Safety & Design Guarantees
+## 🌐 REST API (Django)
+
+### Start the server
+
+```bash
+cd server
+python manage.py runserver
+```
+
+---
+
+### 🔌 API Endpoints
+
+#### Health check
+
+```
+GET /health/
+```
+
+#### Warm-up models (recommended)
+
+```
+POST /v1/warmup
+```
+
+Body:
+
+```json
+{"embedding":"google","llm_model":"google"}
+```
+
+#### Rebuild index
+
+```
+POST /v1/index
+```
+
+Body:
+
+```json
+{
+  "docs_path": "../src/data",
+  "rebuild": true,
+  "embedding": "google"
+}
+```
+
+#### Ask (human-readable)
+
+```
+POST /v1/ask
+```
+
+Body:
+
+```json
+{
+  "question": "What are the leave policies?",
+  "k": 6,
+  "embedding": "google",
+  "llm_model": "google"
+}
+```
+
+#### Ask (structured JSON)
+
+```
+POST /v1/ask_json
+```
+
+Same body as above.
+
+---
+
+### 🔐 Authentication
+
+All `/v1/*` endpoints require:
+
+```
+X-API-Key: <DOCQA_API_KEY>
+```
+
+Configured via `.env`.
+
+---
+
+## 🧱 Safety & Design Guarantees
 
 * ❌ No hallucinated answers
-* 📚 Answers **only** from retrieved context
-* 🧾 Citations are **validated against retrieved chunks**
-* 🧱 Structured output **always valid JSON**
-* 🔒 Refusal text is exact and enforced
-* 🧪 Eval catches regressions early
+* 📚 Answers only from retrieved context
+* 🧾 Citations tied to indexed chunks
+* 🧱 Always valid JSON output
+* 🔒 Exact refusal text enforced
+* 🧪 Evaluation catches regressions early
+* 📄 Full error stack traces logged to file
 
 ---
 
@@ -294,12 +298,13 @@ Most RAG demos:
 * trust the model too much
 * skip refusals
 * produce messy outputs
-* lack evaluation
+* lack evaluation and logging
 
-This project:
+This system:
 
 * treats LLMs as **untrusted components**
-* validates everything at boundaries
+* validates inputs and outputs rigorously
+* separates core logic from API layer
 * behaves like a real internal policy QA system
 
 ---
@@ -310,10 +315,10 @@ This project:
 * HR / compliance document search
 * Internal knowledge bases
 * Regulated environments
-* RAG system reference implementation
+* Reference implementation for safe RAG systems
 
 ---
 
 ## 📜 License
 
-MIT (or update as needed).
+MIT
