@@ -1,4 +1,4 @@
-# 📄 Policy-Document-QA-Agent
+# Policy-Document-QA-Agent
 
 A **production-grade Document Question Answering (QA) system** built with **LangChain**, offering both:
 
@@ -16,7 +16,7 @@ This project is designed to be:
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 ### Core RAG Capabilities
 
@@ -57,7 +57,7 @@ This project is designed to be:
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 Policy-Document-QA-Agent/
@@ -102,22 +102,22 @@ Policy-Document-QA-Agent/
 
 ---
 
-## 🔧 Setup
+## Setup
 
-### 1️⃣ Create a virtual environment
+### 1. Create a virtual environment
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate   # Windows
 ```
 
-### 2️⃣ Install dependencies
+### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3️⃣ Configure environment variables
+### 3. Configure environment variables
 
 Create `.env` from the example:
 
@@ -140,7 +140,7 @@ DOCQA_API_KEY=your_api_key_here
 
 ---
 
-## 🚀 CLI Usage (Core System)
+## CLI Usage (Core System)
 
 ### Ingest & index documents
 
@@ -172,7 +172,7 @@ python -m main run --k 15 --mmr --embedding hf --llm-model google
 
 ---
 
-## 🧪 Evaluation Suite (CLI)
+## Evaluation Suite (CLI)
 
 Runs predefined test questions and verifies:
 
@@ -193,7 +193,7 @@ Passed: 5/5
 
 ---
 
-## 🌐 REST API (Django)
+## REST API (Django)
 
 ### Start the server
 
@@ -204,7 +204,7 @@ python manage.py runserver
 
 ---
 
-### 🔌 API Endpoints
+### API Endpoints
 
 #### Health check
 
@@ -267,7 +267,7 @@ Same body as above.
 
 ---
 
-### 🔐 Authentication
+### Authentication
 
 All `/v1/*` endpoints require:
 
@@ -279,19 +279,19 @@ Configured via `.env`.
 
 ---
 
-## 🧱 Safety & Design Guarantees
+## Safety & Design Guarantees
 
-* ❌ No hallucinated answers
-* 📚 Answers only from retrieved context
-* 🧾 Citations tied to indexed chunks
-* 🧱 Always valid JSON output
-* 🔒 Exact refusal text enforced
-* 🧪 Evaluation catches regressions early
-* 📄 Full error stack traces logged to file
+* No hallucinated answers
+* Answers only from retrieved context
+* Citations tied to indexed chunks
+* Always valid JSON output
+* Exact refusal text enforced
+* Evaluation catches regressions early
+* Full error stack traces logged to file
 
 ---
 
-## 🧠 Why This Project Is Different
+## Why This Project Is Different
 
 Most RAG demos:
 
@@ -309,7 +309,7 @@ This system:
 
 ---
 
-## 📌 Use Cases
+## Use Cases
 
 * Company policy QA
 * HR / compliance document search
@@ -319,6 +319,6 @@ This system:
 
 ---
 
-## 📜 License
+## License
 
 MIT
