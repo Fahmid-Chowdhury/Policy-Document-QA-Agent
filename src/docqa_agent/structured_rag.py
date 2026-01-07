@@ -80,10 +80,12 @@ def _format_context(docs: List[Document]) -> str:
 
 def _compute_confidence(scores: Optional[List[float]]) -> float:
     """
-    Robust confidence heuristic:
-    - scores may be outside [0, 1] depending on backend/version.
-    - we clamp everything and clamp final result too.
+    Returns:
+      - float in [0,1] if scores are provided
+      - None if scores are not available (e.g., MMR)
     """
+    if scores is None:
+        return None
     if not scores:
         return 0.0
 
@@ -125,7 +127,10 @@ def build_structured_answer(
     Always returns a valid QAResponse (strict schema).
     If parsing fails, returns fallback JSON (insufficient evidence).
     """
-    confidence = _compute_confidence(retrieved_scores)
+    confidence_opt = _compute_confidence(retrieved_scores)
+    confidence = 0.0 if confidence_opt is None else confidence_opt
+
+    # Always clamp
     if confidence < 0.0:
         confidence = 0.0
     if confidence > 1.0:
@@ -217,19 +222,19 @@ def build_structured_answer(
                 )
             )
             
-            MAX_CITATIONS = 6
+        MAX_CITATIONS = 6
 
-            # de-duplicate by chunk_id, keep first occurrence
-            seen = set()
-            deduped = []
-            for c in fixed_citations:
-                if c.chunk_id in seen:
-                    continue
-                seen.add(c.chunk_id)
-                deduped.append(c)
+        # de-duplicate by chunk_id, keep first occurrence
+        seen = set()
+        deduped: List[Citation] = []
+        for c in fixed_citations:
+            if c.chunk_id in seen:
+                continue
+            seen.add(c.chunk_id)
+            deduped.append(c)
 
-            # cap
-            fixed_citations = deduped[:MAX_CITATIONS]
+        # cap
+        fixed_citations = deduped[:MAX_CITATIONS]
 
         # If the model answered but gave no valid citations, treat as insufficient.
         if not fixed_citations:
@@ -240,6 +245,13 @@ def build_structured_answer(
                 confidence=min(confidence, 0.25),
                 insufficient_evidence=True,
             )
+            
+        # If scores were unavailable (MMR), derive a conservative confidence from evidence.
+        if confidence_opt is None:
+            # Stronger when more citations exist, but keep conservative bounds.
+            confidence = 0.15 + 0.05 * len(fixed_citations)
+            if confidence > 0.45:
+                confidence = 0.45
 
         # Final response
         return QAResponse(

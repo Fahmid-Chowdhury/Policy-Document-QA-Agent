@@ -24,11 +24,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to documents folder (used in later phases).",
     )
+    
     parser.add_argument(
         "--rebuild-index",
         action="store_true",
         help="Rebuild vector index from documents (used in later phases).",
     )
+    
     parser.add_argument(
         "--debug",
         action="store_true",
@@ -101,13 +103,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="google",
         help="Embedding model to use for vector store.",
     ) 
+    
+    parser.add_argument(
+    "--session-id",
+    type=str,
+    default="default",
+    help="Conversation session id (CLI).",
+    )
 
     parser.add_argument(
         "command",
         nargs="?",
         default="health",
-        choices=["health", "config", "ingest", "chunk", "index", "retrieve", "ask", "ask_json", "run", "eval"],
-        help="Command to run: health | config | ingest | chunk | index | retrieve | ask | ask_json | run | eval",
+        choices=["health", "config", "ingest", "chunk", "index", "retrieve", "ask", "ask_json", "run", "eval", "chat"],
+        help="Command to run: health | config | ingest | chunk | index | retrieve | ask | ask_json | run | eval | chat",
     )
     return parser
 
@@ -294,8 +303,9 @@ def run_cli() -> None:
         return
     
     """
-    answerable question: python -m main ask --docs ./data --k 6 --mmr --embedding hf --llm_model google --question "What are the leave policies?"
-    unanswerable question (should refuse): python -m main ask --docs ./data --k 6 --mmr --embedding hf --llm_model google --question "What is the capital of Japan?"
+    answerable question MMR: python -m main ask --docs ./data --k 6 --mmr --embedding hf --llm_model google --question "What are the leave policies?"
+    answerable question Similarity: python -m main ask --docs ./data --k 6 --embedding hf --llm_model google --question "What are the leave policies?"
+    unanswerable question (should refuse) MMR: python -m main ask --docs ./data --k 6 --mmr --embedding hf --llm_model google --question "What is the capital of Japan?"
     """
     if args.command == "ask":
         if not args.docs:
@@ -339,7 +349,8 @@ def run_cli() -> None:
         return
 
     """
-    answerable → valid JSON with citations: python -m main ask_json --docs ./data --k 6 --embedding hf --llm_model google --question "What are the leave policies?"
+    answerable → valid JSON with citations: python -m main ask_json --docs ./data --k 6 --mmr --fetch-k 30 --embedding hf --llm-model google --question "What are the leave policies?"
+    answerable → valid JSON with citations: python -m main ask_json --docs ./data --k 6 --embedding hf --llm-model google --question "What are the leave policies?"
     unanswerable → refusal JSON: python -m main ask_json --docs ./data --k 6 --embedding hf --llm_model google --question "What is the capital of Japan?"
     """
     if args.command == "ask_json":
@@ -354,7 +365,7 @@ def run_cli() -> None:
             build_or_load_chroma,
             similarity_search_with_scores,
         )
-        from docqa_agent.retriever import build_retriever, retrieve_docs
+        from docqa_agent.retriever import build_retriever, retrieve_docs, retrieve_docs_with_scores
         from docqa_agent.structured_rag import build_llm, build_llm_hf, build_structured_answer
         from docqa_agent.schema import QAResponse
 
@@ -373,6 +384,13 @@ def run_cli() -> None:
         question = args.question or "Summarize the main topic discussed in the documents."
 
         # Get docs + scores (confidence heuristic)
+        # scored = retrieve_docs_with_scores(
+        #             vectordb,
+        #             question=question,
+        #             k=args.k,
+        #             use_mmr=args.mmr,
+        #             fetch_k=args.fetch_k,
+        #         )
         scored = similarity_search_with_scores(vectordb, question, k=args.k)
         retrieved_docs = [d for (d, s) in scored]
         scores = [float(s) for (d, s) in scored]
@@ -517,7 +535,83 @@ def run_cli() -> None:
                         # print(f"    quote: {c.quote}")
 
             print("")  # spacing
-    
+            
+    if args.command == "chat":
+        if not args.docs:
+            raise SystemExit("Error: --docs is required for chat")
+
+        from docqa_agent.vectorstore import (
+            build_or_load_chroma,
+            build_embeddings,
+            build_embeddings_hf,
+            similarity_search_with_scores,
+        )
+        from docqa_agent.structured_rag import build_llm
+        from langchain_huggingface import ChatHuggingFace
+        from docqa_agent.structured_rag import build_llm_hf
+        from docqa_agent.conversation import get_history, conversational_answer
+
+        # embeddings
+        if args.embedding == "google":
+            embeddings = build_embeddings()
+        elif args.embedding == "hf":
+            embeddings = build_embeddings_hf()
+        else:
+            raise SystemExit("Error: unsupported --embedding")
+
+        vectordb = build_or_load_chroma(
+            persist_dir=config.index_dir,
+            collection_name=config.collection_name,
+            embeddings=embeddings,
+        )
+
+        # llm
+        if args.llm_model == "google":
+            llm = build_llm()
+        elif args.llm_model == "hf":
+            llm = ChatHuggingFace(llm=build_llm_hf())
+        else:
+            raise SystemExit("Error: unsupported --llm-model")
+
+        history = get_history(args.session_id)
+
+        print("Conversational Policy QA (type :exit to quit)")
+        print(f"session_id={args.session_id} | k={args.k} | mmr={bool(args.mmr)}")
+
+        while True:
+            q = input("\nYou: ").strip()
+            if not q:
+                continue
+            if q.lower() in [":exit", "exit", "quit"]:
+                break
+
+            resp, standalone, docs, scores = conversational_answer(
+                llm=llm,
+                vectordb=vectordb,
+                question=q,
+                history=history,
+                k=args.k,
+                mmr=bool(args.mmr),
+                fetch_k=(args.fetch_k or 30),
+            )
+
+            print("\nAssistant:")
+            print(resp.answer)
+
+            if args.debug:
+                print("\n[debug]")
+                print(f"standalone: {standalone}")
+                print(f"retrieved_docs: {len(docs)}")
+                if scores is None:
+                    print("scores: None (expected for MMR or no-score store)")
+                else:
+                    print(f"scores: min={min(scores):.3f} max={max(scores):.3f}")
+
+            if not args.no_citations and resp.citations:
+                print("\nCitations:")
+                for c in resp.citations:
+                    print(f"- {c.source_file} page={c.page} chunk_id={c.chunk_id}")
+
     """
     python -m main eval --k 10 --embedding hf --llm-model google
     """

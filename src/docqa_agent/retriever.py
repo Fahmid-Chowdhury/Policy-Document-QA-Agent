@@ -35,3 +35,25 @@ def build_retriever(
 def retrieve_docs(retriever, question: str) -> List[Document]:
     # New LangChain style: invoke()
     return retriever.invoke(question)
+
+def retrieve_docs_with_scores(
+    vectordb: Chroma,
+    question: str,
+    k: int = 5,
+    use_mmr: bool = True,
+    fetch_k: Optional[int] = None,
+):
+    if fetch_k is None:
+        fetch_k = max(20, k * 4)
+
+    if use_mmr:
+        return vectordb.relevance_search_with_score(
+            query=question,
+            k=k,
+            fetch_k=fetch_k,
+        )
+
+    return vectordb.similarity_search_with_score(
+        query=question,
+        k=k,
+    )
