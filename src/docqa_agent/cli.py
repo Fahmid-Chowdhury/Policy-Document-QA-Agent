@@ -536,6 +536,10 @@ def run_cli() -> None:
 
             print("")  # spacing
             
+    """
+    chat mode MMR: python -m main chat --docs ./data --k 15 --mmr --fetch-k 30 --embedding hf --llm-model google --session-id demo --debug
+    chat mode Similarity: python -m main chat --docs ./data --k 15 --embedding hf --llm-model google --session-id demo --debug
+    """
     if args.command == "chat":
         if not args.docs:
             raise SystemExit("Error: --docs is required for chat")
